@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ゴキブリチャット  Version1.0</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; display:flex; flex-direction:column; height:100vh; background:#f5f5f5; }
+  header { background:#4f46e5; color:white; padding:12px; text-align:center; font-weight:bold; }
+  #chat { flex:1; padding:10px; overflow-y:auto; }
+  .message { background:white; padding:8px 12px; margin-bottom:8px; border-radius:12px; max-width:80%; word-break:break-word; }
+  .me { margin-left:auto; background:#dbeafe; }
+  footer { display:flex; padding:8px; background:#eee; }
+  input { flex:1; padding:10px; border-radius:8px; border:none; outline:none; font-size:16px; }
+  button { margin-left:6px; padding:10px 14px; border:none; border-radius:8px; background:#4f46e5; color:white; font-size:16px; }
+  #login { display:flex; justify-content:center; align-items:center; height:100%; flex-direction:column; }
+</style>
+</head>
+<body>
+
+<header id="header">ゴキブリチャット　Version1.0</header>
+
+<div id="login">
+  <input id="nameInput" type="text" placeholder="名前を入力してください">
+  <button id="enterChat">チャット開始</button>
+</div>
+
+<div id="chat" style="display:none;"></div>
+
+<footer id="footer" style="display:none;">
+  <input id="input" type="text" placeholder="メッセージを入力してください">
+  <button onclick="send()">送信</button>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+  // ここを自分のFirebase設定に置き換える
+  const firebaseConfig = {
+    apiKey: "AIzaSyD2ayLO8X5BPNUzweTzWvPpNIxsZzlCFiU",
+    authDomain: "gokiburichat.firebaseapp.com",
+    projectId: "gokiburichat",
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const loginDiv = document.getElementById("login");
+  const chatDiv = document.getElementById("chat");
+  const footer = document.getElementById("footer");
+  const input = document.getElementById("input");
+  const header = document.getElementById("header");
+  const nameInput = document.getElementById("nameInput");
+  const enterChat = document.getElementById("enterChat");
+
+  let currentUserName = "";
+
+  enterChat.onclick = () => {
+    const name = nameInput.value.trim();
+    if(!name) { alert("名前を入力してね"); return; }
+    currentUserName = name;
+    loginDiv.style.display = "none";
+    chatDiv.style.display = "block";
+    footer.style.display = "flex";
+    header.textContent = "ゴキブリチャット - " + currentUserName;
+    loadMessages();
+  }
+
+  function send() {
+    const text = input.value.trim();
+    if(!text) return;
+    db.collection("messages").add({
+      text: text,
+      user: currentUserName,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      readBy: [currentUserName]
+    });
+    input.value = "";
+  }
+
+  function loadMessages() {
+    db.collection("messages").orderBy("timestamp")
+      .onSnapshot(snapshot => {
+        chatDiv.innerHTML = "";
+        snapshot.forEach(doc => {
+          const msg = doc.data();
+          const div = document.createElement("div");
+          div.className = "message" + (msg.user===currentUserName?" me":"");
+          div.textContent = `${msg.user}: ${msg.text} 　　　　　l既読（自分含む）${msg.readBy.length}`;
+          chatDiv.appendChild(div);
+
+          // 既読更新
+          if(!msg.readBy.includes(currentUserName)) {
+            db.collection("messages").doc(doc.id)
+              .update({ readBy: firebase.firestore.FieldValue.arrayUnion(currentUserName) });
+          }
+        });
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+      });
+  }
+
+  input.addEventListener("keydown", e => { if(e.key==="Enter") send(); });
+</script>
+
+</body>
+</html>
+
+<script>function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + (days*24*60*60*1000));
+  document.cookie = name + "=" + encodeURIComponent(value) + ";path=/;expires=" + d.toUTCString();
+}
+
+function getCookie(name) {
+  const cookies = document.cookie.split("; ");
+  for(let c of cookies){
+    const [key, val] = c.split("=");
+    if(key === name) return decodeURIComponent(val);
+  }
+  return "";
+}
+
+window.onload = () => {
+  const savedName = getCookie("chatName");
+  if(savedName){
+    currentUserName = savedName;
+    loginDiv.style.display = "none";
+    chatDiv.style.display = "block";
+    footer.style.display = "flex";
+    header.textContent = "ゴキブリチャット - " + currentUserName;
+    loadMessages();
+  }
+}enterChat.onclick = () => {
+  const name = nameInput.value.trim();
+  if(!name) { alert("名前を入力してね"); return; }
+  currentUserName = name;
+  setCookie("chatName", currentUserName, 365); // 1年保存
+  loginDiv.style.display = "none";
+  chatDiv.style.display = "block";
+  footer.style.display = "flex";
+  header.textContent = "ゴキブリチャット - " + currentUserName;
+  loadMessages();
+}
