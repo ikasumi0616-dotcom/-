@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Music Library</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        :root { --apple-red: #ff2d55; --bg-black: #000; }
+        body { margin: 0; background: var(--bg-black); color: white; font-family: -apple-system, sans-serif; overflow-x: hidden; }
+        
+        /* ライブラリ画面 */
+        #library-screen { padding: 20px; padding-top: 30px; }
+        h1 { font-size: 34px; margin-bottom: 20px; border-bottom: 0.5px solid #333; padding-bottom: 10px; }
+        .song-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 0.5px solid #333; cursor: pointer; }
+        .song-item img { width: 55px; height: 55px; border-radius: 6px; margin-right: 15px; object-fit: cover; }
+        .song-info .title { font-size: 17px; font-weight: 500; }
+        .song-info .artist { font-size: 14px; color: #8e8e93; }
+
+        /* プレイヤー画面（上に引き上げ済み） */
+        #player-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #2c2c2e, #000); display: none; flex-direction: column; align-items: center; padding-top: 20px; z-index: 100; }
+        .back-btn { position: absolute; top: 20px; left: 20px; font-size: 15px; color: white; border: none; background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; }
+        .jacket-big { width: 70%; aspect-ratio: 1/1; border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.7); margin-bottom: 25px; object-fit: cover; }
+        .p-info { width: 80%; text-align: left; margin-bottom: 15px; }
+        .p-title { font-size: 23px; font-weight: bold; }
+        .p-artist { font-size: 18px; color: var(--apple-red); margin-top: 4px; }
+
+        /* 再生バー（白い線） */
+        .seek-container { width: 85%; margin-bottom: 25px; }
+        #seek-bar { width: 100%; accent-color: white; cursor: pointer; height: 4px; }
+        .time-info { display: flex; justify-content: space-between; font-size: 12px; color: #8e8e93; margin-top: 8px; }
+
+        .play-btn { background: white; color: black; border: none; width: 70px; height: 70px; border-radius: 50%; font-size: 30px; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<div id="library-screen">
+    <h1>ライブラリ</h1>
+    
+    <div class="song-item" onclick="openPlayer('ただ君に晴れ', 'ヨルシカ', 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoirt4O4EZaKDVV-OZBHIxqnCemfKkk4IwIDJ28sS7iiDQmdZRU-Yg4B8h&s=10', 'https://rr3---sn-3pm7kn76.googlevideo.com/videoplayback?expire=1768731618&ei=gl9saZaqGYCL4-EPptnxuQQ&ip=125.20.112.90&id=o-AJD1_OQI7Mkaf2HpEtCsfPG0iBQ6dE_NzTjl5Zm-pJg9&itag=251&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=97&bui=AW-iu_qx3fK7aBHMD8lWpUq1oiMR7yv8tVBmboyrgdeqVfoNPBY0KGgpmLIoDWhb6kCDjo9jFKU2erCW&vprv=1&svpuc=1&mime=audio%2Fwebm&ns=FwMQ4w9UCKjGwiv8dVIuuy0R&rqh=1&gir=yes&clen=3245124&dur=199.841&lmt=1726196027396753&keepalive=yes&lmw=1&fexp=51557447,51565116,51565682,51580970&c=TVHTML5&sefc=1&txp=4532434&n=X0NwA9ayHLBaPw&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRQIhAK4HXAU-n65YNGVoW5CuFpdFJxoLd8IS80HNptAGHZmjAiAb1bANMJVGVnz31PTLKZcfWb7OjJvUMgzfNoyHrqP7zA%3D%3D&rm=sn-ci5gup-qxaee7k,sn-qxald76&rrc=79,104&req_id=e904bc958155a3ee&cmsv=e&rms=nxu,au&redirect_counter=2&cms_redirect=yes&ipbypass=yes&met=1768723803,&mh=fu&mip=2400:2650:7144:8f00:b99b:69f0:cd3f:5382&mm=30&mn=sn-3pm7kn76&ms=nxu&mt=1768723463&mv=m&mvi=3&pl=32&lsparams=cps,ipbypass,met,mh,mip,mm,mn,ms,mv,mvi,pl,rms&lsig=APaTxxMwRgIhAMo0uGwQ5YGKLMlErX1cBBXEkaL3XCmMICh6KgLJE0tSAiEAnTt78BJUpllJc02aVeGufTpLdm6Q3KBMcAhgkTKsc1s%3D')">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoirt4O4EZaKDVV-OZBHIxqnCemfKkk4IwIDJ28sS7iiDQmdZRU-Yg4B8h&s=10">
+        <div class="song-info"><div class="title">ただ君に晴れ</div><div class="artist">ヨルシカ</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('正しくなれない', 'ずっと真夜中でいいのに。', 'https://i.kfs.io/album/global/96695506,1v1/fit/500x500.jpg', 'https://rr5---sn-3pm7dned.googlevideo.com/videoplayback?expire=1768746007&ei=t5dsaea7EcPqpt8PiZ2emQo&ip=120.138.151.40&id=o-ALPw-0aK-8D-HpjGzNquEfkNgbCXvcurUmEGquZmyo1P&itag=140&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ==&cps=309&bui=AW-iu_q7Y_Kyau5U824PHIXt7l2oNl_2pVd8ExzO3Clrt_lbRJZGauQfLzf66tB27sAchDpxMjF2mTmo&spc=q5xjPJnBUfcz&vprv=1&svpuc=1&mime=audio/mp4&rqh=1&gir=yes&clen=3900327&dur=240.953&lmt=1705530930809928&keepalive=yes&fexp=51552689,51565115,51565682,51580968&c=ANDROID&txp=4532434&sparams=expire,ei,ip,id,itag,source,requiressl,xpc,bui,spc,vprv,svpuc,mime,rqh,gir,clen,dur,lmt&sig=AJfQdSswRQIhANByjMQdH2Nk5cbt3YydgYBFUhtQMrWgtv-ieo5aFICBAiAW-Ggih3VXlqW6Lg0mSOGvGlh3ICOYpCLmMu20bYkang==&from_cache=False&title=%E3%81%9A%E3%81%A3%E3%81%A8%E7%9C%9F%E5%A4%9C%E4%B8%AD%E3%81%A7%E3%81%84%E3%81%84%E3%81%AE%E3%81%AB%E3%80%82%E3%80%8E%E6%AD%A3%E3%81%97%E3%81%8F%E3%81%AA%E3%82%8C%E3%81%AA%E3%81%84%E3%80%8FMV%EF%BC%88ZUTOMAYO%20%E2%80%93%20Can%E2%80%99t%20Be%20Right%EF%BC%89&rm=sn-jojp-obvk76,sn-ogueee7l&rrc=79,104&req_id=120e09eedebea3ee&rms=rdu,au&redirect_counter=2&cms_redirect=yes&cmsv=e&ipbypass=yes&met=1768724413,&mh=-T&mip=2400:2650:7144:8f00:b99b:69f0:cd3f:5382&mm=29&mn=sn-3pm7dned&ms=rdu&mt=1768724201&mv=m&mvi=5&pl=32&lsparams=cps,ipbypass,met,mh,mip,mm,mn,ms,mv,mvi,pl,rms&lsig=APaTxxMwRgIhAP4DKP-xH_j7_1Q0wvPE6yxeU3b6sK12-waWCB36Ix2DAiEA2YZMe6F_5Pk_YNJRzaGQrnR1HX54VSbsi_CwofARnxI%3D')">
+        <img src="https://i.kfs.io/album/global/96695506,1v1/fit/500x500.jpg">
+        <div class="song-info"><div class="title">正しくなれない</div><div class="artist">ずっと真夜中でいいのに。</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('水色侵略', 'ナユタン星人', '画像URL', 'mizuiro.mp3')">
+        <img src="画像URL">
+        <div class="song-info"><div class="title">水色侵略</div><div class="artist">ナユタン星人</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('怪獣の花唄', 'Vaundy', '画像URL', 'kaiju.mp3')">
+        <img src="画像URL">
+        <div class="song-info"><div class="title">怪獣の花唄</div><div class="artist">Vaundy</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('フォニイ', 'ツミキ', '画像URL', 'phony.mp3')">
+        <img src="画像URL">
+        <div class="song-info"><div class="title">フォニイ</div><div class="artist">ツミキ</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('エゴロック', 'すりぃ', '画像URL', 'ego.mp3')">
+        <img src="画像URL">
+        <div class="song-info"><div class="title">エゴロック</div><div class="artist">すりぃ</div></div>
+    </div>
+
+    <div class="song-item" onclick="openPlayer('恋風', 'アーティスト名', '画像URL', 'koikaze.mp3')">
+        <img src="画像URL">
+        <div class="song-info"><div class="title">恋風</div><div class="artist">アーティスト名</div></div>
+    </div>
+
+</div>
+
+<div id="player-screen">
+    <button class="back-btn" onclick="closePlayer()">✕ 閉じる</button>
+    <img src="" id="p-jacket" class="jacket-big">
+    <div class="p-info">
+        <div id="p-title" class="p-title"></div>
+        <div id="p-artist" class="p-artist"></div>
+    </div>
+
+    <div class="seek-container">
+        <input type="range" id="seek-bar" value="0" step="1">
+        <div class="time-info">
+            <span id="current-time">0:00</span>
+            <span id="duration-time">0:00</span>
+        </div>
+    </div>
+
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+</div>
+
+<script>
+    const audio = new Audio();
+    const seekBar = document.getElementById('seek-bar');
+    const currentTimeEl = document.getElementById('current-time');
+    const durationTimeEl = document.getElementById('duration-time');
+    let isPlaying = false;
+
+    function openPlayer(title, artist, img, src) {
+        document.getElementById('p-title').innerText = title;
+        document.getElementById('p-artist').innerText = artist;
+        document.getElementById('p-jacket').src = img;
+        
+        if (audio.src.indexOf(src) === -1) {
+            audio.src = src;
+            isPlaying = false;
+            document.getElementById('playBtn').innerText = '▶';
+            seekBar.value = 0;
+            currentTimeEl.innerText = "0:00";
+        }
+        document.getElementById('player-screen').style.display = 'flex';
+        
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: title, artist: artist,
+                artwork: [{ src: img, sizes: '512x512', type: 'image/jpeg' }]
+            });
+        }
+    }
+
+    function closePlayer() { document.getElementById('player-screen').style.display = 'none'; }
+
+    function togglePlay() {
+        const btn = document.getElementById('playBtn');
+        if (isPlaying) { audio.pause(); btn.innerText = '▶'; } 
+        else { audio.play(); btn.innerText = 'II'; }
+        isPlaying = !isPlaying;
+    }
+
+    audio.addEventListener('loadedmetadata', () => {
+        seekBar.max = Math.floor(audio.duration);
+        durationTimeEl.innerText = formatTime(audio.duration);
+    });
+
+    audio.addEventListener('timeupdate', () => {
+        seekBar.value = Math.floor(audio.currentTime);
+        currentTimeEl.innerText = formatTime(audio.currentTime);
+    });
+
+    seekBar.addEventListener('input', () => {
+        audio.currentTime = seekBar.value;
+    });
+
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "0:00";
+        const min = Math.floor(seconds / 60);
+        const sec = Math.floor(seconds % 60);
+        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => { audio.play(); isPlaying = true; document.getElementById('playBtn').innerText = 'II'; });
+        navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); isPlaying = false; document.getElementById('playBtn').innerText = '▶'; });
+    }
+</script>
+</body>
+</html>
