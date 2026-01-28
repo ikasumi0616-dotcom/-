@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Music App</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MyMusic">
+    <link rel="apple-touch-icon" href="https://img.atwiki.jp/hmiku/attach/6469/504/IMG_Crime-and-Punishment-Reloaded.JPG">
+
+    <style>
+        :root { --accent: #ffffff; --bg: #000; --text: #fff; --card: #1c1c1e; --radius: 12px; --bar-color: #ffffff; --banner-bg: #2c2c2e; }
+        body.line-mode { --accent: #00c300; --bg: #ffffff; --text: #000; --card: #f8f8f8; --radius: 50%; --bar-color: #00c300; --banner-bg: #e0e0e0; }
+        
+        html, body { 
+            margin: 0; padding: 0; height: 100%; width: 100%; 
+            overflow: hidden; position: fixed; 
+            overscroll-behavior: none;
+            touch-action: none; 
+        }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; transition: background 0.3s; -webkit-tap-highlight-color: transparent; }
+        
+        #style-switcher { position: fixed; right: 0; top: 50%; transform: translateY(-50%); width: 35px; height: 40px; background: #fff; color: #000; border-radius: 20px 0 0 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 1000; cursor: pointer; box-shadow: -2px 2px 10px rgba(0,0,0,0.3); }
+        body.line-mode #style-switcher { background: #000; color: #fff; }
+
+        /* --- インストールバナー --- */
+        #install-banner {
+            position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+            background: var(--banner-bg);
+            display: none; /* JSで制御 */
+            align-items: center; justify-content: space-between;
+            padding: 0 15px; box-sizing: border-box;
+            z-index: 2000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+        }
+        #install-banner.visible { display: flex; }
+        .banner-content { display: flex; align-items: center; overflow: hidden; }
+        .banner-icon { width: 40px; height: 40px; border-radius: 8px; margin-right: 10px; flex-shrink: 0; }
+        .banner-text { font-size: 12px; font-weight: bold; line-height: 1.3; }
+        .banner-sub { font-size: 10px; opacity: 0.7; font-weight: normal; }
+        .install-btn {
+            background: var(--text); color: var(--bg);
+            border: none; padding: 6px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: bold; margin-left: 10px;
+            white-space: nowrap; cursor: pointer; flex-shrink: 0;
+        }
+        #banner-close { background: none; border: none; color: var(--text); font-size: 18px; padding: 5px; margin-left: 5px; opacity: 0.6; }
+
+        /* --- インストール案内モーダル --- */
+        #install-guide {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 3000;
+            display: none; align-items: center; justify-content: center;
+        }
+        #install-guide.active { display: flex; }
+        .guide-card {
+            background: var(--card); color: var(--text); padding: 20px; border-radius: 20px;
+            width: 80%; max-width: 300px; text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .guide-icon { font-size: 40px; margin-bottom: 10px; display: block; }
+        .guide-text { font-size: 14px; line-height: 1.6; text-align: left; margin-bottom: 20px; opacity: 0.9; }
+        .guide-btn {
+            background: var(--text); color: var(--bg); border: none; padding: 10px 20px;
+            border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer;
+        }
+
+        /* ライブラリ部分 */
+        #library-screen { padding: 20px; padding-top: 80px; height: 100vh; overflow-y: auto; box-sizing: border-box; padding-bottom: 200px; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+        .song-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 0.5px solid rgba(128,128,128,0.2); }
+        .song-item img { width: 55px; height: 55px; border-radius: var(--radius); margin-right: 15px; object-fit: cover; }
+        
+        #mini-player { position: fixed; bottom: 15px; left: 10px; right: 10px; height: 64px; background: var(--card); backdrop-filter: blur(20px); border-radius: 12px; display: flex; align-items: center; padding: 0 15px; z-index: 200; transform: translateY(120px); transition: 0.5s cubic-bezier(0.23, 1, 0.32, 1); overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        body.line-mode #mini-player { bottom: 0; left: 0; right: 0; border-radius: 0; border-top: 1px solid #eee; }
+        #mini-player.visible { transform: translateY(0); }
+        #mini-progress { position: absolute; top: 0; left: 0; height: 2px; background: var(--bar-color); width: 0%; }
+        #mini-player img { width: 44px; height: 44px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; }
+        
+        #player-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 300; }
+        #player-overlay.active { display: block; }
+        #player-screen { position: fixed; bottom: 0; left: 0; width: 100%; height: 94%; background: var(--card); display: flex; flex-direction: column; align-items: center; border-radius: 30px 30px 0 0; transform: translateY(100%); transition: 0.4s cubic-bezier(0.25, 1, 0.5, 1); z-index: 400; }
+        body.line-mode #player-screen { border-radius: 0; height: 100%; }
+        
+        #close-btn { position: absolute; right: 20px; top: 20px; font-size: 24px; color: var(--text); border: none; background: none; opacity: 0.6; padding: 10px; }
+        .handle { width: 36px; height: 5px; background: rgba(128,128,128,0.3); border-radius: 5px; margin: 15px 0 40px; }
+        
+        .p-jacket { width: 85%; aspect-ratio: 1/1; border-radius: 15px; transition: 0.6s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 20px 50px rgba(0,0,0,0.4); object-fit: cover; }
+        .p-jacket.paused { transform: scale(0.8); filter: brightness(0.6); }
+        
+        .seek-area { width: 85%; margin-top: 30px; position: relative; z-index: 500; }
+        .seek-container { width: 100%; height: 4px; background: rgba(128,128,128,0.2); border-radius: 2px; position: relative; }
+        .seek-bar-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--bar-color); border-radius: 2px; width: 0%; pointer-events: none; }
+        #p-seek-range { 
+            -webkit-appearance: none; width: 100%; background: transparent; 
+            position: absolute; top: -15px; height: 34px; outline: none; margin: 0; 
+            z-index: 600; cursor: pointer;
+            touch-action: none;
+        }
+        
+        .time-box { display: flex; justify-content: space-between; width: 100%; font-size: 12px; margin-top: 10px; opacity: 0.6; }
+        .play-btn-main { background: none; border: none; color: var(--text); font-size: 80px; margin-top: 20px; outline: none; }
+    </style>
+</head>
+<body id="body">
+
+<div id="install-banner">
+    <div class="banner-content">
+        <img src="https://img.atwiki.jp/hmiku/attach/6469/504/IMG_Crime-and-Punishment-Reloaded.JPG" class="banner-icon">
+        <div>
+            <div class="banner-text">Music App</div>
+            <div class="banner-sub">ホーム画面に追加して快適に再生</div>
+        </div>
+    </div>
+    <div style="display:flex; align-items:center;">
+        <button class="install-btn" onclick="showInstallGuide()">入手</button>
+        <button id="banner-close" onclick="closeBanner()">×</button>
+    </div>
+</div>
+
+<div id="install-guide" onclick="closeInstallGuide()">
+    <div class="guide-card" onclick="event.stopPropagation()">
+        <span class="guide-icon">📲</span>
+        <h3>ホーム画面に追加</h3>
+        <div class="guide-text" id="guide-msg">
+            ブラウザのメニューから<br>
+            「ホーム画面に追加」を選択してください。
+        </div>
+        <button class="guide-btn" onclick="closeInstallGuide()">閉じる</button>
+    </div>
+</div>
+
+<div id="style-switcher" onclick="toggleStyle()">L</div>
+
+<div id="library-screen">
+    <h1 id="lib-title">ライブラリ</h1>
+    <div id="song-list"></div>
+</div>
+
+<div id="mini-player" onclick="showFullPlayer()">
+    <div id="mini-progress"></div>
+    <img src="" id="m-jacket">
+    <div style="flex:1; overflow:hidden;">
+        <div id="m-title" style="font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+        <div id="m-artist" style="font-size:12px; opacity:0.6;"></div>
+    </div>
+    <button style="background:none;border:none;color:inherit;font-size:28px;" onclick="event.stopPropagation(); toggleAudio();" id="m-playBtn">▶</button>
+</div>
+
+<div id="player-overlay" onclick="closePlayer()">
+    <div id="player-screen" onclick="event.stopPropagation()">
+        <button id="close-btn" onclick="closePlayer()">✕</button>
+        <div class="handle"></div>
+        <img src="" id="p-jacket" class="p-jacket paused">
+        <div style="width:85%; margin-top:40px;">
+            <div id="p-title" style="font-size:24px; font-weight:700;"></div>
+            <div id="p-artist" style="font-size:20px; opacity:0.7;"></div>
+        </div>
+        <div class="seek-area">
+            <div class="seek-container">
+                <div id="p-fill" class="seek-bar-fill"></div>
+                <input type="range" id="p-seek-range" value="0" step="0.1" min="0">
+            </div>
+            <div class="time-box">
+                <span id="time-current">0:00</span>
+                <span id="time-total">0:00</span>
+            </div>
+        </div>
+        <button class="play-btn-main" onclick="toggleAudio()" id="p-playBtn">▶</button>
+    </div>
+</div>
+
+<script>
+    const BASE_URL = `https://raw.githubusercontent.com/ikasumi0616-dotcom/-/main/`;
+    const songs = [
+        {title:'罪と罰', artist:'DECO*27', img:'https://img.atwiki.jp/hmiku/attach/6469/504/IMG_Crime-and-Punishment-Reloaded.JPG', src:'9.m4a'},
+        {title:'ビノミ', artist:'MARETU', img:'https://pimg.awa.io/v2/jacket/43bc05d3089cd67cd040.w800.h800.v1769421348.webp', src:'11.m4a'},
+        {title:'水色侵略', artist:'ナユタン星人', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQFSIg4JHtAksIoZjpoCoiHVxorSrSfVItpfxMThqFO7ptiPkgRYI-qq1Y&s=10', src:'song1.m4a'},
+        {title:'キセキ', artist:'GReeeeN', img:'https://img.hmv.co.jp/hybridimage/news/images/21/0810/1019/body_150020.jpeg', src:'10.m4a'},
+        {title:'ただ君に晴れ', artist:'ヨルシカ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoirt4O4EZaKDVV-OZBHIxqnCemfKkk4IwIDJ28sS7iiDQmdZRU-Yg4B8h&s=10', src:'song2.m4a'},
+        {title:'正しくなれない', artist:'ずっと真夜中でいいのに。', img:'https://i.kfs.io/album/global/96695506,1v1/fit/500x500.jpg', src:'song3.m4a'},
+        {title:'フォニイ', artist:'ツミキ', img:'https://i1.sndcdn.com/artworks-tT9a73bRyGkxGhyM-gD3vjA-t500x500.jpg', src:'song4.m4a'},
+        {title:'エゴロック', artist:'すりぃ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRnUm5J7ccLutsqE-OElu_8yzJZXClKv98UWXiNVBHv7AtydVwZtMBLAdY&s=10', src:'song5.m4a'},
+        {title:'恋風', artist:'幾田りら', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSR1CTX1feIVp0pqB5dsukeZg9TLh9SfxPZKrT779M9MlIjL4swLFbMt2o&s=10', src:'song6.m4a'},
+        {title:'怪獣の花唄', artist:'Vaundy', img:'https://i.ytimg.com/vi/QPmwuAe2wBA/maxresdefault.jpg', src:'song7.m4a'},
+        {title:'プロポーズ', artist:'なとり', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTSqJHqCO-a88-rl7YZiHVhkHSiKNipFC3Y69S6AjMi7pimx1e1-RpbTlkW&s=10', src:'song8.m4a'}
+    ];
+
+    const audio = new Audio();
+    let currentIdx = 0;
+    let isDragging = false; 
+
+    const banner = document.getElementById('install-banner');
+    const guide = document.getElementById('install-guide');
+    const guideMsg = document.getElementById('guide-msg');
+
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+        setTimeout(() => banner.classList.add('visible'), 1000);
+    }
+
+    function showInstallGuide() {
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isIOS) {
+            guideMsg.innerHTML = '画面下の <span style="font-size:1.2em">⏏</span> (共有)ボタンを押して<br><b>「ホーム画面に追加」</b><br>を選択してください。';
+        } else {
+            guideMsg.innerHTML = 'ブラウザのメニュー(︙)から<br><b>「アプリをインストール」</b>または<br><b>「ホーム画面に追加」</b><br>を選択してください。';
+        }
+        guide.classList.add('active');
+    }
+
+    function closeInstallGuide() { guide.classList.remove('active'); }
+    function closeBanner() {
+        banner.classList.remove('visible');
+        document.getElementById('library-screen').style.paddingTop = '50px';
+    }
+
+    const songList = document.getElementById('song-list');
+    songs.forEach((s, i) => {
+        songList.innerHTML += `<div class="song-item" onclick="playSong(${i})"><img src="${s.img}"><div><div style="font-weight:600;">${s.title}</div><div style="font-size:12px;opacity:0.6;">${s.artist}</div></div></div>`;
+    });
+
+    function toggleStyle() {
+        const isLine = document.getElementById('body').classList.toggle('line-mode');
+        document.getElementById('lib-title').innerText = isLine ? 'トップソング' : 'ライブラリ';
+    }
+
+    function playSong(i) {
+        currentIdx = i;
+        audio.src = BASE_URL + songs[i].src;
+        document.getElementById('m-title').innerText = songs[i].title;
+        document.getElementById('m-artist').innerText = songs[i].artist;
+        document.getElementById('m-jacket').src = songs[i].img;
+        document.getElementById('p-title').innerText = songs[i].title;
+        document.getElementById('p-artist').innerText = songs[i].artist;
+        document.getElementById('p-jacket').src = songs[i].img;
+        document.getElementById('mini-player').classList.add('visible');
+        audio.load();
+        audio.play().catch(() => {});
+        updateUI();
+
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: songs[i].title, artist: songs[i].artist,
+                artwork: [{ src: songs[i].img, sizes: '512x512', type: 'image/jpeg' }]
+            });
+        }
+    }
+
+    function toggleAudio() { if (audio.paused) audio.play(); else audio.pause(); updateUI(); }
+    function updateUI() {
+        const icon = !audio.paused ? 'II' : '▶';
+        document.getElementById('m-playBtn').innerText = icon;
+        document.getElementById('p-playBtn').innerText = icon;
+        document.getElementById('p-jacket').classList.toggle('paused', audio.paused);
+    }
+
+    audio.addEventListener('timeupdate', () => {
+        if (isDragging) return;
+        const cur = audio.currentTime, dur = audio.duration || 1;
+        if (songs[currentIdx].title === '罪と罰' && cur >= 177) { playSong((currentIdx + 1) % songs.length); return; }
+        document.getElementById('p-seek-range').max = dur;
+        document.getElementById('p-seek-range').value = cur;
+        document.getElementById('time-current').innerText = formatTime(cur);
+        document.getElementById('time-total').innerText = formatTime(dur);
+        const ratio = (cur / dur) * 100;
+        document.getElementById('p-fill').style.width = ratio + '%';
+        document.getElementById('mini-progress').style.width = ratio + '%';
+        if ('mediaSession' in navigator && Math.floor(cur) % 2 === 0) {
+            navigator.mediaSession.setPositionState({ duration: dur, playbackRate: 1, position: cur });
+        }
+    });
+
+    audio.addEventListener('ended', () => playSong((currentIdx + 1) % songs.length));
+    function formatTime(s) { if(!s || isNaN(s)) return "0:00"; const m = Math.floor(s/60), ss = Math.floor(s%60); return `${m}:${ss<10?'0':''}${ss}`; }
+
+    const seekRange = document.getElementById('p-seek-range');
+    seekRange.addEventListener('touchstart', (e) => { isDragging = true; e.stopPropagation(); }, {passive: false});
+    seekRange.addEventListener('touchmove', (e) => { e.stopPropagation(); }, {passive: false});
+    seekRange.addEventListener('touchend', (e) => { e.stopPropagation(); isDragging = false; }, {passive: false});
+    seekRange.addEventListener('input', function(e) {
+        e.stopPropagation();
+        document.getElementById('time-current').innerText = formatTime(this.value);
+        const ratio = (this.value / (audio.duration || 1)) * 100 + '%';
+        document.getElementById('p-fill').style.width = ratio + '%';
+    });
+    seekRange.addEventListener('change', function(e) { e.stopPropagation(); audio.currentTime = this.value; isDragging = false; });
+
+    let startY = 0;
+    const pScreen = document.getElementById('player-screen');
+    const pOverlay = document.getElementById('player-overlay');
+    pScreen.ontouchstart = (e) => { if (isDragging || e.target === seekRange) return; startY = e.touches[0].clientY; pScreen.style.transition = 'none'; };
+    pScreen.ontouchmove = (e) => {
+        if (isDragging || e.target === seekRange) return;
+        let moveY = e.touches[0].clientY - startY;
+        if (moveY > 0) {
+            pScreen.style.transform = `translateY(${moveY}px)`;
+            pOverlay.style.background = `rgba(0,0,0,${0.8 * (1 - moveY/window.innerHeight)})`;
+        }
+    };
+    pScreen.ontouchend = (e) => {
+        if (isDragging) return;
+        pScreen.style.transition = '0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+        if (e.changedTouches[0].clientY - startY > 150) closePlayer();
+        else { pScreen.style.transform = 'translateY(0)'; pOverlay.style.background = 'rgba(0,0,0,0.8)'; }
+    };
+
+    function showFullPlayer() { pOverlay.classList.add('active'); setTimeout(() => { pScreen.style.transform = 'translateY(0)'; pOverlay.style.background = 'rgba(0,0,0,0.8)'; }, 10); }
+    function closePlayer() { pScreen.style.transform = 'translateY(100%)'; pOverlay.style.background = 'rgba(0,0,0,0)'; setTimeout(() => pOverlay.classList.remove('active'), 400); }
+
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => audio.play());
+        navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', () => playSong((currentIdx - 1 + songs.length) % songs.length));
+        navigator.mediaSession.setActionHandler('nexttrack', () => playSong((currentIdx + 1) % songs.length));
+    }
+</script>
+</body>
+</html>
