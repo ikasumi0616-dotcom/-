@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Music App</title>
+    
+    <style>
+        :root { --bg: #000; --text: #fff; --card: #1c1c1e; --radius: 12px; --bar-color: #ffb7c5; }
+        
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        
+        #library-screen { padding: 20px; padding-top: 80px; height: 100vh; overflow-y: auto; box-sizing: border-box; padding-bottom: 200px; }
+        .song-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 0.5px solid rgba(128,128,128,0.2); cursor: pointer; }
+        .song-item img { width: 55px; height: 55px; border-radius: var(--radius); margin-right: 15px; object-fit: cover; }
+        
+        #mini-player { position: fixed; bottom: 15px; left: 10px; right: 10px; height: 64px; background: var(--card); border-radius: 12px; display: flex; align-items: center; padding: 0 15px; z-index: 200; transform: translateY(120px); transition: 0.5s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        #mini-player.visible { transform: translateY(0); }
+        #mini-progress { position: absolute; top: 0; left: 0; height: 2px; background: var(--bar-color); width: 0%; }
+        #mini-player img { width: 44px; height: 44px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; }
+
+        .btn-container { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+        .btn-container span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 28px; display: none; }
+        .is-playing .icon-pause { display: block; }
+        .is-paused .icon-play { display: block; }
+        
+        #player-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 300; }
+        #player-overlay.active { display: block; }
+        #player-screen { position: fixed; bottom: 0; left: 0; width: 100%; height: 94%; background: var(--card); display: flex; flex-direction: column; align-items: center; border-radius: 30px 30px 0 0; transform: translateY(100%); transition: 0.4s cubic-bezier(0.25, 1, 0.5, 1); z-index: 400; touch-action: none; }
+        
+        .handle { width: 40px; height: 5px; background: rgba(128,128,128,0.4); border-radius: 5px; margin: 15px 0 20px; }
+        
+        .jacket-container { position: relative; width: 54%; aspect-ratio: 1/1; display: flex; justify-content: center; align-items: center; margin-top: 50px; margin-bottom: 50px; }
+        .p-jacket { width: 100%; height: 100%; border-radius: 15px; z-index: 10; object-fit: cover; transition: 0.3s; -webkit-user-select: none; user-select: none; }
+        .p-jacket.paused { transform: scale(0.9); filter: brightness(0.7); }
+
+        /* 吹き出しのスタイル */
+        #guide-bubble {
+            position: absolute; bottom: -45px; left: 50%; transform: translateX(-50%);
+            background: var(--bar-color); color: #000; padding: 6px 12px; border-radius: 8px;
+            font-size: 11px; font-weight: bold; white-space: nowrap; z-index: 100;
+            display: none; box-shadow: 0 4px 10px rgba(0,0,0,0.3); animation: bounce 2s infinite;
+        }
+        #guide-bubble::after {
+            content: ''; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+            border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 8px solid var(--bar-color);
+        }
+        @keyframes bounce { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -5px); } }
+
+        #visualizer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 250%; height: 250%; z-index: 1; pointer-events: none; }
+        
+        .seek-area { width: 85%; margin-top: 15px; position: relative; z-index: 500; }
+        .seek-container { width: 100%; height: 4px; background: rgba(128,128,128,0.2); border-radius: 2px; position: relative; }
+        .seek-bar-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--bar-color); border-radius: 2px; width: 0%; pointer-events: none; }
+        #p-seek-range { -webkit-appearance: none; width: 100%; background: transparent; position: absolute; top: -15px; height: 34px; outline: none; margin: 0; z-index: 600; cursor: pointer; }
+        
+        .time-box { display: flex; justify-content: space-between; width: 100%; font-size: 12px; margin-top: 10px; opacity: 0.6; }
+
+        .play-btn-main { position: relative; background: none; border: none; color: var(--text); width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; margin-top: 20px; outline: none; }
+        .play-btn-main span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; display: none; }
+    </style>
+</head>
+<body>
+
+<div id="library-screen">
+    <h1 style="font-weight:700;">ライブラリ</h1>
+    <div id="song-list"></div>
+</div>
+
+<div id="mini-player" onclick="showFullPlayer()">
+    <div id="mini-progress"></div>
+    <img src="" id="m-jacket">
+    <div style="flex:1; overflow:hidden;">
+        <div id="m-title" style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+        <div id="m-artist" style="font-size:12px; opacity:0.6;"></div>
+    </div>
+    <div class="btn-container is-paused" id="m-play-wrapper" onclick="event.stopPropagation(); toggleAudio();">
+        <span class="icon-play">▶</span>
+        <span class="icon-pause">II</span>
+    </div>
+</div>
+
+<div id="player-overlay" onclick="closePlayer()">
+    <div id="player-screen" onclick="event.stopPropagation()">
+        <button onclick="closePlayer()" style="position:absolute;right:20px;top:20px;font-size:24px;color:#fff;background:none;border:none;opacity:0.6;z-index:600;">✕</button>
+        <div class="handle"></div>
+        <div class="jacket-container">
+            <canvas id="visualizer"></canvas>
+            <div id="guide-bubble">new! 長押しでアナライザー変更</div>
+            <img src="" id="p-jacket" class="p-jacket paused" 
+                 onmousedown="startPress()" onmouseup="endPress()" 
+                 ontouchstart="startPress()" ontouchend="endPress()">
+        </div>
+        <div style="width:85%; margin-top:10px; text-align: center;">
+            <div id="p-title" style="font-size:20px; font-weight:700;"></div>
+            <div id="p-artist" style="font-size:16px; opacity:0.7;"></div>
+        </div>
+        <div class="seek-area">
+            <div class="seek-container">
+                <div id="p-fill" class="seek-bar-fill"></div>
+                <input type="range" id="p-seek-range" value="0" step="0.1">
+            </div>
+            <div class="time-box">
+                <span id="time-current">0:00</span><span id="time-total">0:00</span>
+            </div>
+        </div>
+        <div class="play-btn-main is-paused" id="p-play-wrapper" onclick="toggleAudio()">
+            <span class="icon-play" style="margin-left:5px;">▶</span>
+            <span class="icon-pause">II</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const BASE_URL = `https://raw.githubusercontent.com/ikasumi0616-dotcom/-/main/`;
+    const songs = [
+        {title:'罪と罰', artist:'DECO*27', img:'https://img.atwiki.jp/hmiku/attach/6469/504/IMG_Crime-and-Punishment-Reloaded.JPG', src:'9.m4a'},
+        {title:'ビノミ', artist:'MARETU', img:'https://pimg.awa.io/v2/jacket/43bc05d3089cd67cd040.w800.h800.v1769421348.webp', src:'11.m4a'},
+        {title:'水色侵略', artist:'ナユタン星人', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQFSIg4JHtAksIoZjpoCoiHVxorSrSfVItpfxMThqFO7ptiPkgRYI-qq1Y&s=10', src:'song1.m4a'},
+        {title:'キセキ', artist:'GReeeeN', img:'https://img.hmv.co.jp/hybridimage/news/images/21/0810/1019/body_150020.jpeg', src:'10.m4a'},
+        {title:'ただ君に晴れ', artist:'ヨルシカ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoirt4O4EZaKDVV-OZBHIxqnCemfKkk4IwIDJ28sS7iiDQmdZRU-Yg4B8h&s=10', src:'song2.m4a'},
+        {title:'正しくなれない', artist:'ずっと真夜中でいいのに。', img:'https://i.kfs.io/album/global/96695506,1v1/fit/500x500.jpg', src:'song3.m4a'},
+        {title:'フォニイ', artist:'ツミキ', img:'https://i1.sndcdn.com/artworks-tT9a73bRyGkxGhyM-gD3vjA-t500x500.jpg', src:'song4.m4a'},
+        {title:'エゴロック', artist:'すりぃ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRnUm5J7ccLutsqE-OElu_8yzJZXClKv98UWXiNVBHv7AtydVwZtMBLAdY&s=10', src:'song5.m4a'},
+        {title:'恋風', artist:'幾田りら', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSR1CTX1feIVp0pqB5dsukeZg9TLh9SfxPZKrT779M9MlIjL4swLFbMt2o&s=10', src:'song6.m4a'},
+        {title:'怪獣の花唄', artist:'Vaundy', img:'https://i.ytimg.com/vi/QPmwuAe2wBA/maxresdefault.jpg', src:'song7.m4a'},
+        {title:'プロポーズ', artist:'なとり', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTSqJHqCO-a88-rl7YZiHVhkHSiKNipFC3Y69S6AjMi7pimx1e1-RpbTlkW&s=10', src:'song8.m4a'}
+    ];
+
+    const audio = new Audio();
+    audio.crossOrigin = "anonymous";
+    let audioCtx, analyser, source, currentIdx = 0;
+    let vizMode = 0; 
+    let isSeeking = false;
+    let particles = [];
+    let pressTimer;
+
+    const canvas = document.getElementById('visualizer'), ctx = canvas.getContext('2d');
+
+    // Cookie管理
+    function setSeen() {
+        document.cookie = "seen_guide=true; max-age=31536000; path=/";
+        document.getElementById('guide-bubble').style.display = 'none';
+    }
+    function checkSeen() {
+        return document.cookie.split(';').some((item) => item.trim().startsWith('seen_guide='));
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('song-list').innerHTML = songs.map((s, i) => `
+            <div class="song-item" onclick="playSong(${i})">
+                <img src="${s.img}" loading="lazy"><div><div style="font-weight:600;">${s.title}</div><div style="font-size:12px;opacity:0.6;">${s.artist}</div></div>
+            </div>`).join('');
+        initParticles();
+    });
+
+    function initParticles() {
+        particles = [];
+        for(let i=0; i<150; i++) particles.push({ a: Math.random()*Math.PI*2, life: Math.random(), speed: Math.random() * 0.005 + 0.002 });
+    }
+
+    function initCtx() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 512;
+            source = audioCtx.createMediaElementSource(audio);
+            source.connect(analyser); analyser.connect(audioCtx.destination);
+            draw();
+        }
+    }
+
+    function draw() {
+        requestAnimationFrame(draw);
+        const w = canvas.offsetWidth, h = canvas.offsetHeight;
+        canvas.width = w * 2; canvas.height = h * 2;
+        ctx.scale(2, 2);
+        ctx.clearRect(0,0,w,h);
+        if(!analyser) return;
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const innerRadius = (Math.min(w,h)/2) * 0.45;
+
+        if (vizMode === 0) {
+            ctx.fillStyle = "#ffb7c5";
+            for(let i=0; i<80; i++){
+                const val = data[i%80];
+                const sensitivity = Math.pow(val/255, 3.0);
+                const finalH = sensitivity * 80;
+                ctx.save();
+                ctx.translate(w/2, h/2);
+                ctx.rotate((i/80)*Math.PI*2);
+                if(finalH > 0.5) {
+                    ctx.beginPath();
+                    ctx.roundRect(-1.5, innerRadius+20, 3, finalH+1.5, 1.5);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        } 
+        else {
+            let avg = 0; for(let i=0; i<20; i++) avg += data[i]; avg = (avg/20)/255;
+            particles.forEach((p, idx) => {
+                if(!audio.paused) { p.life += p.speed + (avg*0.03); if(p.life>1) p.life=0; }
+                const fIdx = Math.floor((idx/particles.length)*data.length*0.5);
+                const wave = (data[fIdx]/255)*50*p.life;
+                const r = innerRadius + (p.life*80) + wave;
+                ctx.fillStyle = `rgba(255, 183, 197, ${(1-p.life)*0.8})`;
+                ctx.beginPath(); ctx.arc(w/2 + Math.cos(p.a)*r, h/2 + Math.sin(p.a)*r, 1.2, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.beginPath();
+            for(let i=0; i<=100; i++){
+                const a = (i/100)*Math.PI*2;
+                const fIdx = Math.floor((i%50)/50*20);
+                const r = innerRadius + (data[fIdx]/255*15);
+                const x = w/2 + Math.cos(a)*r, y = h/2 + Math.sin(a)*r;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.strokeStyle = "rgba(255,183,197,0.5)"; ctx.lineWidth=1.5; ctx.stroke();
+        }
+    }
+
+    function startPress() { pressTimer = setTimeout(() => { vizMode = (vizMode === 0 ? 1 : 0); setSeen(); }, 500); }
+    function endPress() { clearTimeout(pressTimer); }
+
+    function playSong(i) {
+        initCtx(); currentIdx = i;
+        audio.src = BASE_URL + songs[i].src;
+        document.getElementById('m-jacket').src = document.getElementById('p-jacket').src = songs[i].img;
+        document.getElementById('m-title').innerText = document.getElementById('p-title').innerText = songs[i].title;
+        document.getElementById('m-artist').innerText = document.getElementById('p-artist').innerText = songs[i].artist;
+        document.getElementById('mini-player').classList.add('visible');
+        audio.play(); updateUI();
+    }
+
+    function toggleAudio() { initCtx(); audio.paused ? audio.play() : audio.pause(); updateUI(); }
+    function updateUI() {
+        const state = audio.paused ? 'is-paused' : 'is-playing';
+        document.getElementById('m-play-wrapper').className = 'btn-container ' + state;
+        document.getElementById('p-play-wrapper').className = 'play-btn-main ' + state;
+        document.getElementById('p-jacket').classList.toggle('paused', audio.paused);
+    }
+
+    const seek = document.getElementById('p-seek-range');
+    seek.addEventListener('mousedown', () => isSeeking = true);
+    seek.addEventListener('touchstart', () => isSeeking = true, {passive: true});
+    seek.addEventListener('input', (e) => {
+        const r = (e.target.value / audio.duration) * 100 + '%';
+        document.getElementById('p-fill').style.width = r;
+        document.getElementById('time-current').innerText = fmt(e.target.value);
+    });
+    seek.addEventListener('change', (e) => { audio.currentTime = e.target.value; isSeeking = false; });
+
+    audio.ontimeupdate = () => {
+        if (!isSeeking) {
+            seek.max = audio.duration || 1;
+            seek.value = audio.currentTime;
+            const r = (audio.currentTime / seek.max) * 100 + '%';
+            document.getElementById('p-fill').style.width = r;
+            document.getElementById('mini-progress').style.width = r;
+            document.getElementById('time-current').innerText = fmt(audio.currentTime);
+            document.getElementById('time-total').innerText = fmt(audio.duration || 0);
+        }
+    };
+    audio.onended = () => playSong((currentIdx + 1) % songs.length);
+    function fmt(s) { const m=Math.floor(s/60), v=Math.floor(s%60); return `${m}:${v<10?'0':''}${v}`; }
+
+    let startY = 0;
+    const pScreen = document.getElementById('player-screen');
+    pScreen.addEventListener('touchstart', (e)=>startY=e.touches[0].clientY, {passive:true});
+    pScreen.addEventListener('touchmove', (e)=>{ if(e.touches[0].clientY-startY > 0) pScreen.style.transform=`translateY(${e.touches[0].clientY-startY}px)`;}, {passive:true});
+    pScreen.addEventListener('touchend', (e)=>{
+        if(e.changedTouches[0].clientY-startY > 100) closePlayer();
+        else { pScreen.style.transition='0.4s'; pScreen.style.transform='translateY(0)'; }
+    });
+
+    function showFullPlayer() { 
+        document.getElementById('player-overlay').classList.add('active'); 
+        setTimeout(()=>document.getElementById('player-screen').style.transform='translateY(0)',10); 
+        // 初回なら吹き出し表示
+        if(!checkSeen()) document.getElementById('guide-bubble').style.display = 'block';
+    }
+    function closePlayer() { 
+        document.getElementById('player-screen').style.transform='translateY(100%)'; 
+        setTimeout(()=>document.getElementById('player-overlay').classList.remove('active'),400); 
+        setSeen(); // 閉じた時も消す
+    }
+</script>
+</body>
+</html>
