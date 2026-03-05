@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Music App - Full Lyrics Edition</title>
+    <style>
+        :root { --bg: #000; --text: #fff; --card: #1c1c1e; --accent: #ffb7c5; }
+        html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; position: fixed; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        #library-screen { padding: 20px; padding-top: 60px; height: 100vh; overflow-y: auto; box-sizing: border-box; padding-bottom: 120px; }
+        .song-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 0.5px solid rgba(255,255,255,0.1); cursor: pointer; }
+        .song-item img { width: 55px; height: 55px; border-radius: 12px; margin-right: 15px; object-fit: cover; }
+
+        #mini-player { position: fixed; bottom: 15px; left: 10px; right: 10px; height: 64px; background: var(--card); border-radius: 12px; display: flex; align-items: center; padding: 0 15px; z-index: 200; transform: translateY(120px); transition: 0.5s cubic-bezier(0.2, 1, 0.2, 1); box-shadow: 0 -5px 15px rgba(0,0,0,0.3); }
+        #mini-player.visible { transform: translateY(0); }
+        #mini-progress { position: absolute; top: 0; left: 0; height: 2px; background: var(--accent); width: 0%; }
+
+        #player-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; z-index: 300; }
+        #player-overlay.active { display: block; }
+        #player-screen { position: fixed; bottom: 0; left: 0; width: 100%; height: 96%; background: var(--card); border-radius: 30px 30px 0 0; transform: translateY(100%); transition: 0.4s cubic-bezier(0.2, 1, 0.2, 1); overflow: hidden; }
+        
+        #bg-blur { position: absolute; inset: 0; z-index: -1; opacity: 0; transition: 0.8s ease-in-out; background: linear-gradient(180deg, #4b3a5a 0%, #2a1a3a 100%); }
+        #player-screen.lyrics-active #bg-blur { opacity: 1; }
+
+        .handle-area { width: 100%; height: 60px; display: flex; justify-content: center; align-items: center; touch-action: none; z-index: 501; position: absolute; top: 0; left: 0; }
+        .handle { width: 36px; height: 5px; background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+        .main-visual { width: 100%; display: flex; flex-direction: column; align-items: center; transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 70px; }
+        #p-img-large { width: 80vw; max-width: 300px; aspect-ratio: 1/1; border-radius: 15px; object-fit: cover; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+
+        #lyrics-view { 
+            position: absolute; 
+            top: 15%; 
+            width: 100%; 
+            height: 55%; 
+            padding: 0 35px; 
+            box-sizing: border-box; 
+            overflow-y: auto; 
+            opacity: 0; 
+            transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1); 
+            scroll-behavior: smooth; 
+            -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+        }
+        #lyrics-view::-webkit-scrollbar { display: none; }
+        
+        #player-screen.lyrics-active #lyrics-view { opacity: 1; transform: translateY(0); }
+        #player-screen:not(.lyrics-active) #lyrics-view { transform: translateY(20px); }
+        #player-screen.lyrics-active .main-visual { opacity: 0; transform: scale(0.9) translateY(-20px); pointer-events: none; }
+
+        .lyric-line { font-size: 26px; font-weight: 800; margin-bottom: 30px; color: rgba(255,255,255,0.15); transition: color 0.7s ease, transform 0.8s; line-height: 1.3; word-break: break-all; transform: scale(0.95); transform-origin: left center; }
+        .lyric-line.active { color: #fff; transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,255,255,0.3)); }
+
+        .bottom-controls { position: absolute; bottom: 40px; width: 100%; display: flex; flex-direction: column; align-items: center; }
+        .time-info { width: 85%; display: flex; justify-content: space-between; font-size: 12px; opacity: 0.5; margin-bottom: 5px; }
+        .seek-bar { width: 85%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; position: relative; }
+        #p-fill { height: 100%; background: #fff; width: 0%; border-radius: 2px; }
+        #p-range { position: absolute; top: -15px; width: 100%; opacity: 0; height: 34px; cursor: pointer; }
+        
+        .play-btn { font-size: 60px; background: none; border: none; color: #fff; margin-top: 20px; outline: none; width: 80px; height: 80px; display: inline-flex; align-items: center; justify-content: center; }
+        .sub-btn { position: absolute; bottom: 0px; background: none; border: none; opacity: 0.5; transition: 0.3s; padding: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="library-screen">
+    <h1 style="font-weight: 800; margin-bottom: 25px;">ライブラリ</h1>
+    <div id="song-list"></div>
+</div>
+
+<div id="mini-player" onclick="showFullPlayer()">
+    <div id="mini-progress"></div>
+    <img src="" id="m-img" style="width:44px; height:44px; border-radius:4px; margin-right:12px; object-fit:cover;">
+    <div style="flex:1; font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="m-title"></div>
+    <button onclick="event.stopPropagation(); togglePlay();" id="m-play-btn" style="background:none; border:none; color:#fff; font-size:24px;">▶</button>
+</div>
+
+<div id="player-overlay" onclick="closePlayer()">
+    <div id="player-screen" onclick="event.stopPropagation()">
+        <div id="bg-blur"></div>
+        <div class="handle-area" onclick="closePlayer()"><div class="handle"></div></div>
+        
+        <div class="main-visual">
+            <img src="" id="p-img-large">
+            <div style="text-align: center; margin-top: 30px; padding: 0 20px;">
+                <div id="p-title-large" style="font-size: 22px; font-weight: 800;"></div>
+                <div id="p-artist-large" style="opacity: 0.5; margin-top: 6px; font-size: 15px;"></div>
+            </div>
+        </div>
+
+        <div id="lyrics-view"></div>
+
+        <div class="bottom-controls">
+            <div class="time-info"><span id="cur-time">0:00</span><span id="dur-time">0:00</span></div>
+            <div class="seek-bar"><div id="p-fill"></div><input type="range" id="p-range" min="0" value="0" step="0.1"></div>
+            <button class="sub-btn" onclick="toggleLyrics()" style="left: 30px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M21 15h2v2h-2v-2zm0-4h2v2h-2v-2zm2 8h-2v2h2v-2zM13 15h2v2h-2v-2zm0-4h2v2h-2v-2zm2 8h-2v2h2v-2zm-7-4h2v2H8v-2zm0-4h2v2H8v-2zm2 8H8v2h2v-2zm-7-4h2v2H3v-2zm0-4h2v2H3v-2zm2 8H3v2h2v-2zm-2-8h2v2H3v-2zm0-4h2v2H3V7zm2-4H3v2h2V3zm5 0H8v2h2V3zm5 0h-2v2h2V3zm5 0h-2v2h2V3zM5 15H3v2h2v-2z"/></svg></button>
+            <button class="play-btn" onclick="togglePlay()" id="p-play-btn">▶</button>
+            <button class="sub-btn" onclick="toggleRepeat()" id="repeat-btn" style="right: 30px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v6z"/></svg></button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const BASE_URL = `https://raw.githubusercontent.com/ikasumi0616-dotcom/-/main/`;
+    const songs = [
+        { 
+            title:'メルト', artist:'ryo', img:'https://i-ogp.pximg.net/c/540x540_70/img-master/img/2007/10/06/14/30/39/55418_p0_square1200.jpg', src:'meruto (1).m4a',
+            lyrics: [
+               {time: 0, text: "　　　　　　"}, {time: 12.4, text: "La-la-la-la, la-la-la"}, {time: 15.4, text: "La-la-la-la, la-la-la"}, {time: 18, text: "La-la-la-la, la-la-la"}, {time: 20.5, text: "La-la-la, ah"}, {time: 24, text: "朝目がさめて"}, {time: 26.1, text: "真っ先に思い浮かぶ君のこと"}, {time: 33.6, text: ""}, {time: 35.3, text: "思い切って前髪を切った "}, {time: 39.6, text: "「どうしたの?」って聞かれたくて"}, {time: 44.9, text: ""}, {time: 46, text: "ピンクのスカート お花の髪飾り"}, {time: 51.5, text: "さして出かけるの"}, {time: 54.4, text: "今日の私はかわいいのよ!"}, {time: 60.3, text: "メルト 溶けてしまいそう"}, {time: 65, text: "好きだなんて絶対にいえない"}, {time: 70.5, text: "だけど"}, {time: 71.6, text: "メルト 目も合わせられない"}, {time: 76.2, text: "恋に恋なんてしないわ わたし"}, {time: 82.6, text: ""}, {time: 82.6, text: "だって君のことが"}, {time: 87.8, text: "好きなの"}, {time: 88.6, text: "La-la-la-la, la-la-la"}, {time: 91.4, text: "La-la-la-la, la-la-la"}, {time: 94.3, text: "La-la-la-la, la-la-la"}, {time: 96.9, text: "La-la-la, ah"}, {time: 100.3, text: "天気予報がウソをついた"}, {time: 103.8, text: "土砂降りの雨が降る"}, {time: 109.8, text: ""}, {time: 111.5, text: "カバンに入れたままの"}, {time: 113.6, text: "オリタタミ傘 うれしくない"}, {time: 117.4, text: "ためいきをついた"}, {time: 120.3, text: "そんなとき"}, {time: 122.1, text: "「しょうがないから入ってやる」なんて"}, {time: 127.7, text: "隣にいる きみが笑う"}, {time: 132.3, text: "恋に落ちる音がした"}, {time: 136.7, text: "メルト 息がつまりそう"}, {time: 141.1, text: "君に触れてる右手が震える"}, {time: 146.8, text: "高鳴る胸   はんぶんこの傘"}, {time: 152.5, text: "手を伸ばせば届く距離 どうしよう! "}, {time: 158.9, text: "想いよ届け 君に"}, {time: 164.1, text: "お願い時間を止めて泣きそうなの "}, {time: 170.1, text: "でも嬉しくて"}, {time: 174.4, text: "死んでしまうわ!"}, {time: 176.4, text: ""}, {time: 198.9, text: "La-la-la-la, la-la-la"}, {time: 201.5, text: "La-la-la-la, la-la-la"}, {time: 204.3, text: "La-la-la-la, la-la-la"}, {time: 206.8, text: "La-la-la, ah"}, {time: 210, text: "メルト 駅に着いてしまう"}, {time: 214.7, text: "もう会えない近くて遠いよ"}, {time: 220.2, text: "だから"}, {time: 221.3, text: "メルト 手をつないで歩きたい! "}, {time: 226, text: "もうバイバイしなくちゃいけないの?"}, {time: 232.2, text: "今すぐわたしを抱きしめて! "}, {time: 237.4, text: "なんてね"}, {time: 238.3, text: "La-la-la-la, la-la-la"}, {time: 241.1, text: "La-la-la-la, la-la-la"}, {time: 244, text: "La-la-la-la, la-la-la"}, {time: 246.4, text: "La-la-la, ah"}, {time: 251.4, text: "　　"}
+            ]
+        },
+        { 
+            title:'合言葉Ⅲ', artist:'DECO*27', img:'https://m.media-amazon.com/images/I/71yCSNyUdSL._UF1000,1000_QL80_.jpg', src:'12.m4a',
+            lyrics: [
+                {time: 0, text: " "}, {time: 21.5, text: "想いの冒険を 忘れずに全部言えるかな"}, {time: 28.1, text: "君から聞きたいよ 何回目の僕に出会った？"}, {time: 35.3, text: "僕は変わりました 新しい君に出会うために"}, {time: 42.3, text: "久しぶりだねって 言えたならここで泣こっか"}, {time: 49.0, text: "好きとかって 嫌いとかって"}, {time: 52.3, text: "何度だって愛を歌う君が"}, {time: 56.0, text: "恋しくって 嘘じゃない本当だよ また出会おう"}, {time: 62.8, text: "僕ら“II”を嫌って “I”に戻って 何回だって 間違ってきたよ"}, {time: 70.9, text: "消えない後悔と 冷めない愛情が 恋を再起動する"}, {time: 76.9, text: "ほら“I”を嫌って また“II”に戻って “III”になって 愛を繋いでいこう"}, {time: 85.0, text: "言いたい感情は 伝えたい正解は たったひとつだけ ありがとう"}, {time: 94.0, text: ""}, {time: 105.5, text: "想いの冒険は これからもちゃんと続いていく"}, {time: 112.4, text: "3と9に乗って 言葉とか飛び越えちゃって"}, {time: 119.5, text: "君も変わりました 新しい誰かに会うために"}, {time: 126.3, text: "大人になりました それだけで良いと思えた"}, {time: 133.2, text: "好きとかって 嫌いとかって 何度だって愛を歌う君が"}, {time: 140.3, text: "恋しくって 嘘じゃない本当だよ また出会おう"}, {time: 149, text: ""}, {time: 161.7, text: "“恋”をして …バカ。"}, {time: 165.2, text: "“愛”にして …バカ。"}, {time: 168.4, text: "バカでいい この先もずっとこのまま …バカ。"}, {time: 175.2, text: ""}, {time: 176.7, text: "僕ら“II”を嫌って “I”に戻って 何回だって 間違ってきたよ"}, {time: 184.8, text: "消えない後悔と 冷めない愛情が 恋を再起動する"}, {time: 190.5, text: "ほら“I”を嫌って また“II”に戻って “III”になって 愛を繋いでいこう"}, {time: 198.9, text: "言いたい感情は 伝えたい正解は たったひとつだけ ありがとう"}, {time: 205.4, text: "メーデー 僕と判っても もう抱き締めなくていいんだよ"}, {time: 208.9, text: "終わんない愛を抱いてたくないの もっとちゃんと不安にしてよ"}, {time:212.4 , text: "妄想感傷代償連盟 愛を懐いて理想を号んだ"}, {time: 216.2, text: "行き場のある愛のメロディーを 今 これまでにありがとう"}, {time: 223, text: "いつまでも君と"}, {time: 225.4, text: "「こんな歌あったね」って 出会いを数えられるように"}, {time: 236.8, text: ""}
+            ]
+        },
+        {title:'罪と罰', artist:'DECO*27', img:'https://img.atwiki.jp/hmiku/attach/6469/504/IMG_Crime-and-Punishment-Reloaded.JPG', src:'9.m4a'},
+        {title:'ビノミ', artist:'MARETU', img:'https://pimg.awa.io/v2/jacket/43bc05d3089cd67cd040.w800.h800.v1769421348.webp', src:'11.m4a'},
+        {title:'水色侵略', artist:'ナユタン星人', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQFSIg4JHtAksIoZjpoCoiHVxorSrSfVItpfxMThqFO7ptiPkgRYI-qq1Y&s=10', src:'song1.m4a'},
+        {title:'キセキ', artist:'GReeeeN', img:'https://img.hmv.co.jp/hybridimage/news/images/21/0810/1019/body_150020.jpeg', src:'10.m4a'},
+        {title:'ただ君に晴れ', artist:'ヨルシカ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoirt4O4EZaKDVV-OZBHIxqnCemfKkk4IwIDJ28sS7iiDQmdZRU-Yg4B8h&s=10', src:'song2.m4a'},
+        {title:'正しくなれない', artist:'ずっと真夜中でいいのに。', img:'https://i.kfs.io/album/global/96695506,1v1/fit/500x500.jpg', src:'song3.m4a'},
+        {title:'フォニイ', artist:'ツミキ', img:'https://i1.sndcdn.com/artworks-tT9a73bRyGkxGhyM-gD3vjA-t500x500.jpg', src:'song4.m4a'},
+        {title:'エゴロック', artist:'すりぃ', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRnUm5J7ccLutsqE-OElu_8yzJZXClKv98UWXiNVBHv7AtydVwZtMBLAdY&s=10', src:'song5.m4a'},
+        {title:'恋風', artist:'幾田りら', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSR1CTX1feIVp0pqB5dsukeZg9TLh9SfxPZKrT779M9MlIjL4swLFbMt2o&s=10', src:'song6.m4a'},
+        {title:'怪獣の花唄', artist:'Vaundy', img:'https://i.ytimg.com/vi/QPmwuAe2wBA/maxresdefault.jpg', src:'song7.m4a'},
+        {title:'プロポーズ', artist:'なとり', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTSqJHqCO-a88-rl7YZiHVhkHSiKNipFC3Y69S6AjMi7pimx1e1-RpbTlkW&s=10', src:'song8.m4a'}
+    ];
+
+    const audio = new Audio();
+    let currentIdx = -1, lastActiveIdx = -1, isSeeking = false, repeatMode = 0; 
+
+    function fmtTime(s) { if(isNaN(s)) return "0:00"; const m = Math.floor(s/60), sc = Math.floor(s%60); return `${m}:${sc < 10 ? '0'+sc : sc}`; }
+
+    function initLibrary() {
+    // スワイプで閉じる機能のみ追加
+(function() {
+    const playerScreen = document.getElementById('player-screen');
+    let touchStartY = 0;
+
+    playerScreen.addEventListener('touchstart', (e) => {
+        // 画面の上部20%（5分の1）の範囲でタッチが開始されたかチェック
+        const rect = playerScreen.getBoundingClientRect();
+        const relativeY = e.touches[0].clientY - rect.top;
+        
+        if (relativeY < rect.height / 5) {
+            touchStartY = e.touches[0].clientY;
+        } else {
+            touchStartY = 0; // 範囲外ならリセット
+        }
+    }, { passive: true });
+
+    playerScreen.addEventListener('touchend', (e) => {
+        if (touchStartY === 0) return;
+
+        const touchEndY = e.changedTouches[0].clientY;
+        const swipeDistance = touchEndY - touchStartY;
+
+        // 下方向に50px以上スワイプされたら閉じる
+        if (swipeDistance > 50) {
+            closePlayer();
+        }
+        touchStartY = 0;
+    }, { passive: true });
+})();
+
+        document.getElementById('song-list').innerHTML = songs.map((s, i) => `
+            <div class="song-item" onclick="playSong(${i})">
+                <img src="${s.img}">
+                <div><div style="font-weight:600;">${s.title}</div><div style="font-size:12px;opacity:0.6;">${s.artist}</div></div>
+            </div>`).join('');
+    }
+
+    function playSong(i) {
+        currentIdx = i; const song = songs[i];
+        audio.src = BASE_URL + song.src;
+        document.getElementById('m-img').src = document.getElementById('p-img-large').src = song.img;
+        document.getElementById('m-title').innerText = document.getElementById('p-title-large').innerText = song.title;
+        document.getElementById('p-artist-large').innerText = song.artist;
+        document.getElementById('lyrics-view').innerHTML = (song.lyrics || []).map((l, idx) => `<div class="lyric-line" id="l-${idx}" onclick="audio.currentTime=${l.time}">${l.text}</div>`).join('');
+        document.getElementById('mini-player').classList.add('visible');
+        lastActiveIdx = -1;
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({ title: song.title, artist: song.artist, artwork: [{ src: song.img }] });
+            navigator.mediaSession.setActionHandler('play', () => togglePlay());
+            navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+            navigator.mediaSession.setActionHandler('previoustrack', () => playSong((currentIdx - 1 + songs.length) % songs.length));
+            navigator.mediaSession.setActionHandler('nexttrack', () => playSong((currentIdx + 1) % songs.length));
+        }
+        audio.play(); updateUI();
+    }
+
+    function togglePlay() { audio.paused ? audio.play() : audio.pause(); updateUI(); }
+    function updateUI() { 
+        const isPaused = audio.paused;
+        document.getElementById('m-play-btn').innerText = isPaused ? '▶' : 'II'; 
+        document.getElementById('p-play-btn').innerText = isPaused ? '▶' : 'II'; 
+    }
+    function toggleRepeat() { repeatMode = (repeatMode + 1) % 2; document.getElementById('repeat-btn').style.opacity = (repeatMode === 1) ? '1' : '0.5'; }
+    function toggleLyrics() { document.getElementById('player-screen').classList.toggle('lyrics-active'); }
+    function showFullPlayer() { document.getElementById('player-overlay').classList.add('active'); setTimeout(() => document.getElementById('player-screen').style.transform = 'translateY(0)', 10); }
+    function closePlayer() { document.getElementById('player-screen').style.transform = 'translateY(100%)'; setTimeout(() => document.getElementById('player-overlay').classList.remove('active'), 400); }
+
+    audio.onended = () => { if (repeatMode === 1) { audio.currentTime = 0; audio.play(); } else { playSong((currentIdx + 1) % songs.length); } };
+    audio.ontimeupdate = () => {
+        if (!isSeeking) {
+            const p = (audio.currentTime / (audio.duration || 1)) * 100 + '%';
+            document.getElementById('p-fill').style.width = document.getElementById('mini-progress').style.width = p;
+            document.getElementById('p-range').value = audio.currentTime; 
+            document.getElementById('p-range').max = audio.duration || 1;
+            document.getElementById('cur-time').innerText = fmtTime(audio.currentTime);
+        }
+        document.getElementById('dur-time').innerText = fmtTime(audio.duration);
+        const ly = songs[currentIdx]?.lyrics;
+        if (ly) {
+            let cur = -1; ly.forEach((l, idx) => { if(audio.currentTime >= l.time) cur = idx; });
+            if (cur !== lastActiveIdx && cur !== -1) {
+                lastActiveIdx = cur;
+                document.querySelectorAll('.lyric-line').forEach((el, idx) => {
+                    el.classList.toggle('active', idx === cur);
+                    if(idx === cur) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+            }
+        }
+    };
+
+    const rangeInput = document.getElementById('p-range');
+    rangeInput.oninput = (e) => { isSeeking = true; document.getElementById('p-fill').style.width = (e.target.value / (e.target.max || 1)) * 100 + '%'; };
+    rangeInput.onchange = (e) => { audio.currentTime = e.target.value; isSeeking = false; };
+
+    initLibrary();
+</script>
+</body>
+</html>
